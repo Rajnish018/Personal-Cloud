@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { ROUTES } from "../../utils/constants";
+import CloudLoader from "../../components/loadingScreen/CloudLoader";
 import {
 	  CloudIcon,
 	  UserIcon,
@@ -30,9 +33,10 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const update = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -69,17 +73,37 @@ const Register = () => {
     return errs;
   };
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (!isSubmitting) return;
+
+    const timer = window.setTimeout(() => {
+      navigate(ROUTES.HOME, { replace: true });
+    }, 1400);
+
+    return () => window.clearTimeout(timer);
+  }, [isSubmitting, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
-    setIsLoading(true);
-    setTimeout(() => {
-      localStorage.setItem("token", "demo-token");
-      navigate("/", { replace: true });
-    }, 900);
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        name: `${form.firstName} ${form.lastName}`.trim(),
+        email: form.email,
+        password: form.password,
+      });
+    } catch {
+      setIsSubmitting(false);
+    }
   };
+
+  if (isSubmitting) {
+    return <CloudLoader onComplete={() => {}} />;
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-[#f8fafc] text-slate-900 font-sans antialiased overflow-x-hidden select-none">
@@ -96,7 +120,7 @@ const Register = () => {
                 <CloudIcon size={22} color="#85B7EB" />
               </div>
               <span className="text-xl font-bold tracking-tight text-[#E6F1FB]">
-                NimbusDrive
+                Personal Cloud
               </span>
             </div>
 
@@ -106,7 +130,7 @@ const Register = () => {
                 Start storing<br />for free today.
               </h2>
               <p className="text-sm text-[#85B7EB] leading-relaxed max-w-sm">
-                Join over 2 million users who trust NimbusDrive to keep files safe, synced, and accessible anywhere.
+                Join over 2 million users who trust Personal Cloud to keep files safe, synced, and accessible anywhere.
               </p>
             </div>
 
@@ -138,7 +162,15 @@ const Register = () => {
       </div>
 
       {/* RIGHT FORM CANVAS */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-white overflow-y-auto">
+      <div className="relative flex-1 flex items-center justify-center p-6 sm:p-12 bg-white overflow-y-auto">
+        {loading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg shadow-slate-200/40">
+              <div className="w-10 h-10 rounded-full border-4 border-white border-t-[#185FA5] border-t-4 border-[#185FA5] animate-spin" />
+              <span className="text-sm font-semibold text-[#185FA5]">Creating account…</span>
+            </div>
+          </div>
+        )}
         <div className="w-full max-w-[420px] flex flex-col py-6">
           
           {/* Header Texts */}
@@ -335,15 +367,15 @@ const Register = () => {
             {/* Form submission action trigger button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full h-11 flex items-center justify-center gap-2.5 rounded-xl text-sm font-semibold bg-[#185FA5] text-white shadow-sm shadow-[#185FA5]/10 hover:bg-[#14508c] hover:shadow transition-all duration-150 active:scale-[0.99] disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none pt-1"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <RocketIcon />
               )}
-              <span>{isLoading ? "Creating account..." : "Create free account"}</span>
+              <span>{isSubmitting ? "Creating account..." : "Create free account"}</span>
             </button>
           </form>
 

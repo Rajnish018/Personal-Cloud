@@ -2,57 +2,80 @@ import mongoose from "mongoose";
 
 const shareSchema = new mongoose.Schema(
   {
-    file: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "File",
-      default: null,
-    },
-
-    folder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Folder",
-      default: null,
-    },
-
+    // Owner of the share
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
+    // Resource being shared – either a file or a folder
+    resourceType: {
+      type: String,
+      enum: ["file", "folder"],
+      required: true,
+    },
+    resourceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    // Unique token for the share link
     shareToken: {
       type: String,
       required: true,
       unique: true,
     },
-
-    isPublic: {
+    // Full share link (optional storage for convenience)
+    shareLink: {
+      type: String,
+    },
+    // Access control type
+    accessType: {
+      type: String,
+      enum: ["public", "private", "restricted"],
+      default: "private",
+    },
+    // Permissions granted to the link holder
+    permissions: {
+      type: [String],
+      enum: ["view", "comment", "download", "edit", "owner"],
+      default: ["view"],
+    },
+    // Specific collaborators
+    sharedWith: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        permission: {
+          type: String,
+          enum: ["view", "comment", "download", "edit", "owner"],
+          required: true,
+        },
+      },
+    ],
+    passwordProtected: {
       type: Boolean,
       default: false,
     },
-
     password: {
       type: String,
       default: null,
     },
-
-    permission: {
-      type: String,
-      enum: ["view", "comment", "edit"],
-      default: "view",
-    },
-
     expiresAt: {
       type: Date,
       default: null,
     },
-
-    accessCount: {
-      type: Number,
-      default: 0,
+    allowDownload: {
+      type: Boolean,
+      default: true,
+    },
+    allowCopy: {
+      type: Boolean,
+      default: true,
     },
   },
   { timestamps: true }
 );
+
+// TTL index for automatic expiration of shares
+shareSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export default mongoose.model("Share", shareSchema);

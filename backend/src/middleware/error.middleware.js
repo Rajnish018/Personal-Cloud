@@ -1,6 +1,6 @@
 import multer from "multer";
 
-export const errorHandler = (
+const errorHandler = (
   err,
   req,
   res,
@@ -22,3 +22,5 @@ export const errorHandler = (
 
   next();
 };
+
+export default errorHandler;

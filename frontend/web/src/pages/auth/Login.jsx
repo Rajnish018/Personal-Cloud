@@ -1,44 +1,73 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { 
-  CloudIcon, 
-  ShieldIcon, 
-  RefreshIcon, 
-  ShareIcon, 
-  MailIcon, 
-  LockIcon, 
-  EyeIcon, 
-  EyeOffIcon, 
-  LoginIcon, 
-  GoogleIcon, 
-  MicrosoftIcon 
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { ROUTES } from "../../utils/constants";
+import {
+  CloudIcon,
+  ShieldIcon,
+  RefreshIcon,
+  ShareIcon,
+  MailIcon,
+  LockIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LoginIcon,
+  GoogleIcon,
+  MicrosoftIcon
 } from "../../components/icons/Icons";
+import CloudLoader from "../../components/loadingScreen/CloudLoader";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (!isSubmitting) return;
+
+    const timer = window.setTimeout(() => {
+      navigate(location.state?.from?.pathname || ROUTES.HOME, { replace: true });
+    }, 1400);
+
+    return () => window.clearTimeout(timer);
+  }, [isSubmitting, navigate, location.state?.from?.pathname]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      localStorage.setItem("token", "demo-token");
-      navigate("/", { replace: true });
-    }, 800);
+    setIsSubmitting(true);
+
+    try {
+      await login({ email, password, rememberMe });
+    } catch (error) {
+      setIsSubmitting(false);
+
+      const isDeletedAccount =
+        error.response?.data?.code === "ACCOUNT_DELETED" ||
+        error.response?.data?.message?.toLowerCase().includes("deleted");
+
+      if (isDeletedAccount) {
+        navigate("/restore-account", { state: { email } });
+      }
+    }
   };
+
+  if (isSubmitting) {
+    return <CloudLoader onComplete={() => {}} />;
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-[#f8fafc] text-slate-900 font-sans antialiased overflow-hidden select-none">
-      
+
       {/* LEFT SIDEBAR PANEL - Hidden on mobile/tablets, scales up on Desktop views */}
       <div className="hidden lg:flex flex-col justify-between w-[420px] bg-[#0C447C] p-10 flex-shrink-0 relative">
         {/* Subtle background abstract shapes to build visual weight */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none" />
-        
+
         <div className="flex flex-col gap-10 relative z-10 h-full justify-between">
           <div className="space-y-12">
             {/* Logo Row */}
@@ -47,7 +76,7 @@ const Login = () => {
                 <CloudIcon size={22} color="#85B7EB" />
               </div>
               <span className="text-xl font-bold tracking-tight text-[#E6F1FB]">
-                NimbusDrive
+                Personal Cloud
               </span>
             </div>
 
@@ -79,7 +108,7 @@ const Login = () => {
             {[
               { icon: <ShieldIcon />, label: "End-to-end encrypted storage" },
               { icon: <RefreshIcon />, label: "Auto-sync seamlessly across devices" },
-              { icon: <ShareIcon />,  label: "Easy team workspace collaboration" },
+              { icon: <ShareIcon />, label: "Easy team workspace collaboration" },
             ].map(({ icon, label }) => (
               <div key={label} className="flex items-center gap-3 text-[#85B7EB]">
                 <span className="flex-shrink-0 text-[#85B7EB]">{icon}</span>
@@ -91,9 +120,9 @@ const Login = () => {
       </div>
 
       {/* RIGHT WORKSPACE FORM PANEL */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-white">
+      <div className="relative flex-1 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-white">
         <div className="w-full max-w-[400px] flex flex-col">
-          
+
           {/* Header Description */}
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
@@ -165,8 +194,8 @@ const Login = () => {
                 />
                 <span>Remember me</span>
               </label>
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="font-semibold text-[#185FA5] hover:text-[#14508c] hover:underline transition-colors"
               >
                 Forgot password?
@@ -176,15 +205,11 @@ const Login = () => {
             {/* Primary Submit CTA Action */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting || !email || !password}
               className="w-full h-11 flex items-center justify-center gap-2.5 rounded-xl text-sm font-semibold bg-[#185FA5] text-white shadow-sm shadow-[#185FA5]/10 hover:bg-[#14508c] hover:shadow transition-all duration-150 active:scale-[0.99] disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isLoading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <LoginIcon />
-              )}
-              <span>{isLoading ? "Signing in..." : "Sign in"}</span>
+              <LoginIcon />
+              <span>Sign in</span>
             </button>
           </form>
 
@@ -206,8 +231,8 @@ const Login = () => {
           {/* Account Creation Footer Footer */}
           <p className="mt-8 text-center text-sm font-medium text-gray-500">
             Don&apos;t have an account?{" "}
-            <Link 
-              to="/register" 
+            <Link
+              to="/register"
               className="font-semibold text-[#185FA5] hover:text-[#14508c] hover:underline transition-colors"
             >
               Create one free
@@ -220,7 +245,6 @@ const Login = () => {
   );
 };
 
-// Extracted, Clean Single Social Single Button Component Instance
 const SSOButton = ({ label, icon }) => {
   return (
     <button

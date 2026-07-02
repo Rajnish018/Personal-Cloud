@@ -9,6 +9,8 @@ import {
   deleteFolder,
   restoreFolder,
   permanentlyDeleteFolder,
+  getTrashFolders,
+  emptyTrashFolders,
 } from "../controllers/folder.controller.js";
 
 import { protect } from "../middleware/auth.middleware.js";
@@ -21,7 +23,13 @@ router.post("/", createFolder);
 
 router.get("/", getRootFolders);
 
+router.get("/trash", getTrashFolders);
+
+router.delete("/trash/empty", emptyTrashFolders);
+
 router.get("/:folderId", getFolderContents);
+
+router.put("/:folderId", renameFolder);
 
 router.put("/:folderId/rename", renameFolder);
 

@@ -8,19 +8,17 @@ const activitySchema = new mongoose.Schema(
       required: true,
     },
 
-    action: {
+    // Type of resource the activity pertains to (file or folder)
+    resourceType: {
       type: String,
-      enum: [
-        "upload",
-        "download",
-        "delete",
-        "restore",
-        "rename",
-        "move",
-        "share",
-        "login"
-      ],
-      required: true,
+      enum: ["file", "folder"],
+    },
+    resourceId: {
+      type: mongoose.Schema.Types.ObjectId,
+    },
+    // Device information (e.g., browser, OS)
+    device: {
+      type: String,
     },
 
     file: {

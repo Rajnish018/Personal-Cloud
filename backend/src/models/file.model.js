@@ -9,6 +9,11 @@ const fileSchema = new mongoose.Schema(
       trim: true,
       maxlength: [255, "File name cannot exceed 255 characters"],
     },
+    originalName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
     // Cloudinary public id
     publicId: {
@@ -23,6 +28,10 @@ const fileSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    secureUrl: {
+      type: String,
+      required: true,
+    },
 
     // File owner
     owner: {
@@ -34,6 +43,12 @@ const fileSchema = new mongoose.Schema(
 
     // Parent folder
     folder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Folder",
+      default: null,
+      index: true,
+    },
+    folderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Folder",
       default: null,
@@ -66,6 +81,11 @@ const fileSchema = new mongoose.Schema(
       required: true,
       lowercase: true,
     },
+    format: {
+      type: String,
+      required: true,
+      lowercase: true,
+    },
 
     // Favorite
     isStarred: {
@@ -90,6 +110,11 @@ const fileSchema = new mongoose.Schema(
     shared: {
       type: Boolean,
       default: false,
+    },
+    isShared: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
 
     shareLink: {

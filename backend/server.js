@@ -1,15 +1,18 @@
-import dotenv from "dotenv";
-dotenv.config();
+import "./src/config/env.js";
 
 import http from "http";
 import mongoose from "mongoose";
 
-import app from "./src/app.js";
+import app from "./src/app.js"; // Importing your express configuration
+import { initSocket } from "./src/socket.js";
 import connectDB from "./src/config/db.js";
 
-const PORT = Number(process.env.PORT) ;
+import startMinio  from "./startMinio.js";
+
+const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
+startMinio(); // Start MinIO server
 
 let server;
 let isShuttingDown = false;
@@ -18,20 +21,11 @@ let isShuttingDown = false;
  * Validate Environment Variables
  */
 const validateEnv = () => {
-  const required = [
-    "MONGO_URI",
-    "JWT_SECRET",
-  ];
-
-  const missing = required.filter(
-    (key) => !process.env[key]
-  );
+  const required = ["MONGO_URI", "JWT_SECRET"];
+  const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length) {
-    console.error(
-      `Missing environment variables: ${missing.join(", ")}`
-    );
-
+    console.error(`Missing environment variables: ${missing.join(", ")}`);
     process.exit(1);
   }
 };
@@ -45,7 +39,11 @@ const startServer = async () => {
 
     await connectDB();
 
+    // Passing our completely pre-configured express app to the server instance
     server = http.createServer(app);
+
+    // Initialise Socket.IO for real‑time notifications
+    initSocket(server);
 
     server.keepAliveTimeout = 65000;
     server.headersTimeout = 66000;
@@ -58,15 +56,11 @@ const startServer = async () => {
     server.on("error", (error) => {
       switch (error.code) {
         case "EADDRINUSE":
-          console.error(
-            ` Port ${PORT} is already in use`
-          );
+          console.error(` Port ${PORT} is already in use`);
           break;
 
         case "EACCES":
-          console.error(
-            ` Port ${PORT} requires elevated privileges`
-          );
+          console.error(` Port ${PORT} requires elevated privileges`);
           break;
 
         default:
@@ -97,16 +91,12 @@ const shutdown = async (signal) => {
 
   try {
     if (server) {
-      await new Promise((resolve) =>
-        server.close(resolve)
-      );
-
+      await new Promise((resolve) => server.close(resolve));
       console.log(" HTTP Server Closed");
     }
 
     if (mongoose.connection.readyState === 1) {
       await mongoose.connection.close();
-
       console.log(" MongoDB Connection Closed");
     }
 
@@ -157,3 +147,5 @@ mongoose.connection.on("error", (error) => {
   console.error(" MongoDB Error");
   console.error(error);
 });
+
+export default app;

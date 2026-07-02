@@ -13,14 +13,25 @@ const notificationSchema = new mongoose.Schema(
       ref: "User",
     },
 
+    link: { type: String },
     type: {
       type: String,
       enum: [
-        "file_shared",
-        "folder_shared",
-        "workspace_invite",
-        "upload_complete",
-        "comment_added"
+        "FILE_SHARED",
+        "FOLDER_SHARED",
+        "FILE_UPLOADED",
+        "FILE_DELETED",
+        "FILE_RESTORED",
+        "FILE_MOVED",
+        "FILE_RENAMED",
+        "FILE_STARRED",
+        "COMMENT_ADDED",
+        "SHARE_ACCEPTED",
+        "SHARE_REVOKED",
+        "PERMISSION_CHANGED",
+        "FOLDER_CREATED",
+        "FILE_DOWNLOADED",
+        "STORAGE_LIMIT_WARNING"
       ],
       required: true,
     },

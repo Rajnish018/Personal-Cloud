@@ -1,10 +1,3 @@
-const Profile = () => {
-  return (
-    <div>
-      <h1>User Profile</h1>
-      {/* Content for user profile */}
-    </div>
-  );
-};
+import Settings from "../setting/Settings";
 
-export default Profile;
+export default Settings;

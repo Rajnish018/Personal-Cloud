@@ -110,3 +110,23 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.animate-spin-slow {
+  animation: spin 4s linear infinite;
+}
+
+.animate-dash {
+  stroke-dasharray: 150;
+  stroke-dashoffset: 150;
+  animation: dash 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dash {
+  0% { stroke-dashoffset: 150; }
+  100% { stroke-dashoffset: 0; }
+}
