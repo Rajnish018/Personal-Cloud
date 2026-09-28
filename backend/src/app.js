@@ -5,7 +5,6 @@ import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 
-// Adjusted relative paths assuming this file lives inside a "src" folder
 import authRoutes from "../src/routes/auth.route.js";
 import userRoutes from "../src/routes/user.route.js";
 import folderRoutes from "../src/routes/folder.route.js";
@@ -20,6 +19,103 @@ import errorHandler from "../src/middleware/error.middleware.js";
 
 const app = express();
 
+/* -------------------------------------------------------------------------- */
+/*                                  CORS                                      */
+/* -------------------------------------------------------------------------- */
+
+const allowedOrigins = (
+  process.env.CLIENT_URL ||
+  "http://localhost:5173"
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+
+      return callback(null, false);
+    },
+
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "Cache-Control",
+      "Pragma",
+    ],
+
+    exposedHeaders: [
+      "Content-Length",
+      "Content-Range",
+      "Accept-Ranges",
+    ],
+
+    optionsSuccessStatus: 204,
+  })
+);
+
+/* -------------------------------------------------------------------------- */
+/*                                SECURITY                                    */
+/* -------------------------------------------------------------------------- */
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
+  })
+);
+
+/* -------------------------------------------------------------------------- */
+/*                              COMPRESSION                                   */
+/* -------------------------------------------------------------------------- */
+
+app.use(compression());
+
+/* -------------------------------------------------------------------------- */
+/*                             BODY PARSERS                                   */
+/* -------------------------------------------------------------------------- */
+
+app.use(
+  express.json({
+    limit: "50mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+);
+
+/* -------------------------------------------------------------------------- */
+/*                              COOKIES                                       */
+/* -------------------------------------------------------------------------- */
+
 const parseCookies = (req, res, next) => {
   req.cookies = Object.fromEntries(
     (req.headers.cookie || "")
@@ -27,30 +123,59 @@ const parseCookies = (req, res, next) => {
       .filter(Boolean)
       .map((cookie) => {
         const index = cookie.indexOf("=");
-        if (index === -1) return [cookie.trim(), ""];
-        const key = cookie.slice(0, index).trim();
-        const value = cookie.slice(index + 1).trim();
-        return [key, decodeURIComponent(value)];
+
+        if (index === -1) {
+          return [cookie.trim(), ""];
+        }
+
+        const key = cookie
+          .slice(0, index)
+          .trim();
+
+        const value = cookie
+          .slice(index + 1)
+          .trim();
+
+        return [
+          key,
+          decodeURIComponent(value),
+        ];
       })
   );
+
   next();
 };
 
+app.use(parseCookies);
+
+/* -------------------------------------------------------------------------- */
+/*                              SANITIZATION                                  */
+/* -------------------------------------------------------------------------- */
+
 const sanitizeObject = (value) => {
-  if (!value || typeof value !== "object") return value;
+  if (!value || typeof value !== "object") {
+    return value;
+  }
 
   for (const key of Object.keys(value)) {
-    if (key.startsWith("$") || key.includes(".")) {
+    if (
+      key.startsWith("$") ||
+      key.includes(".")
+    ) {
       delete value[key];
       continue;
     }
 
     if (typeof value[key] === "string") {
-      value[key] = value[key].replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+      value[key] = value[key].replace(
+        /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
+        ""
+      );
     } else {
       sanitizeObject(value[key]);
     }
   }
+
   return value;
 };
 
@@ -58,61 +183,24 @@ const sanitizeRequest = (req, res, next) => {
   sanitizeObject(req.body);
   sanitizeObject(req.params);
   sanitizeObject(req.query);
+
   next();
 };
 
-/**
- * Security
- */
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
-
-/**
- * Compression
- */
-app.use(compression());
-
-/**
- * CORS
- */
-app.use(
-  cors({
-    origin(origin, callback) {
-      const allowedOrigins = process.env.CLIENT_URL?.split(",").map((url) =>
-        url.trim()
-      );
-
-      if (!origin || !allowedOrigins?.length || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  })
-);
-
-/**
- * Body Parsers
- */
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(parseCookies);
 app.use(sanitizeRequest);
 
-/**
- * Logging
- */
+/* -------------------------------------------------------------------------- */
+/*                                  LOGGING                                   */
+/* -------------------------------------------------------------------------- */
+
 if (process.env.NODE_ENV !== "test") {
   app.use(morgan("dev"));
 }
 
-/**
- * Rate Limiter
- */
+/* -------------------------------------------------------------------------- */
+/*                              RATE LIMIT                                    */
+/* -------------------------------------------------------------------------- */
+
 app.use(
   "/api",
   rateLimit({
@@ -120,16 +208,19 @@ app.use(
     max: 500,
     standardHeaders: true,
     legacyHeaders: false,
+
     message: {
       success: false,
-      message: "Too many requests. Please try again later.",
+      message:
+        "Too many requests. Please try again later.",
     },
   })
 );
 
-/**
- * Health Check
- */
+/* -------------------------------------------------------------------------- */
+/*                               HEALTH CHECK                                 */
+/* -------------------------------------------------------------------------- */
+
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -146,9 +237,10 @@ app.get("/", (req, res) => {
   });
 });
 
-/**
- * Routes
- */
+/* -------------------------------------------------------------------------- */
+/*                                  ROUTES                                    */
+/* -------------------------------------------------------------------------- */
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/folders", folderRoutes);
@@ -160,9 +252,10 @@ app.use("/api/storage", storageRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/support", supportRoutes);
 
-/**
- * 404
- */
+/* -------------------------------------------------------------------------- */
+/*                                    404                                     */
+/* -------------------------------------------------------------------------- */
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -170,9 +263,10 @@ app.use((req, res) => {
   });
 });
 
-/**
- * Global Error Handler
- */
+/* -------------------------------------------------------------------------- */
+/*                              ERROR HANDLER                                 */
+/* -------------------------------------------------------------------------- */
+
 app.use(errorHandler);
 
 app.use((err, req, res, next) => {
