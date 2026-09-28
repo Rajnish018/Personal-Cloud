@@ -8,6 +8,7 @@ pnpm-debug.log*
 
 # Build outputs
 dist/
+dist-ssr/
 build/
 .next/
 out/
@@ -18,8 +19,15 @@ out/
 .env.*.local
 .env.production.local
 
+# Logs
+logs/
+*.log
+lerna-debug.log*
+*.local
+
 # IDE & Editor
 .vscode/
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
@@ -27,6 +35,11 @@ out/
 .DS_Store
 *.sublime-project
 *.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # OS files
 Thumbs.db
@@ -40,5 +53,4 @@ coverage/
 
 # Misc
 .cache/
-dist/
 .turbo/

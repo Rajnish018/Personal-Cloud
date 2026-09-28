@@ -26,6 +26,7 @@ import HelpSupport from "../pages/helpSupport/HelpSupport";
 import VerifyEmail from "../pages/setting/VerifyEmail";
 import YourTicket from "../pages/helpSupport/YourTicket";
 import LiveTicketChat from "../pages/helpSupport/LiveChatTicket";
+import CloudLoader from "../components/loadingScreen/CloudLoader";
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
