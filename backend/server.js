@@ -7,12 +7,16 @@ import app from "./src/app.js"; // Importing your express configuration
 import { initSocket } from "./src/socket.js";
 import connectDB from "./src/config/db.js";
 
-import startMinio  from "./startMinio.js";
+import startMinio from "./startMinio.js";
+import { assertStorageReady } from "./src/services/storageProvider.js";
+import { startStorageSyncWorker, stopStorageSyncWorker } from "./src/services/storageSyncWorker.js";
 
 const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-startMinio(); // Start MinIO server
+if ((process.env.STORAGE_PROVIDER || "minio").toLowerCase() === "minio" && NODE_ENV !== "production") {
+  startMinio();
+}
 
 let server;
 let isShuttingDown = false;
@@ -21,7 +25,21 @@ let isShuttingDown = false;
  * Validate Environment Variables
  */
 const validateEnv = () => {
-  const required = ["MONGO_URI", "JWT_SECRET"];
+  const required = ["MONGO_URI", "JWT_SECRET", "CLIENT_URL"];
+  const provider = (process.env.STORAGE_PROVIDER || "minio").toLowerCase();
+
+  if (provider === "minio") {
+    required.push("MINIO_ENDPOINT", "MINIO_PORT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY");
+  } else if (provider === "mega") {
+    required.push("MEGA_EMAIL", "MEGA_PASSWORD");
+  } else if (provider === "dual") {
+    // MEGA is required; MinIO may be offline and will catch up later.
+    required.push("MEGA_EMAIL", "MEGA_PASSWORD");
+  } else {
+    console.error(`Unsupported STORAGE_PROVIDER: ${provider}`);
+    process.exit(1);
+  }
+
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length) {
@@ -38,6 +56,9 @@ const startServer = async () => {
     validateEnv();
 
     await connectDB();
+    await assertStorageReady();
+    console.log(`Storage provider: ${process.env.STORAGE_PROVIDER || "minio"}`);
+    startStorageSyncWorker();
 
     // Passing our completely pre-configured express app to the server instance
     server = http.createServer(app);
@@ -49,7 +70,7 @@ const startServer = async () => {
     server.headersTimeout = 66000;
     server.requestTimeout = 300000;
 
-    server.listen(PORT, () => {
+    server.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on port ${PORT} in ${NODE_ENV} mode`);
     });
 
@@ -90,6 +111,8 @@ const shutdown = async (signal) => {
   console.log(`\n ${signal} received`);
 
   try {
+    stopStorageSyncWorker();
+
     if (server) {
       await new Promise((resolve) => server.close(resolve));
       console.log(" HTTP Server Closed");

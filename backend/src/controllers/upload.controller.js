@@ -1,4 +1,4 @@
-import { minioClient } from "../config/minio.js";
+import { storageClient } from "../config/storageClient.js";
 import { incrementUsage } from "../services/storageService.js";
 
 export const uploadFile = async (req, res) => {
@@ -31,7 +31,7 @@ export const uploadFile = async (req, res) => {
     const objectName =
       `${userId}/${folder}/${file.originalname}`;
 
-    await minioClient.putObject(
+    await storageClient.putObject(
 
       "users",
 
@@ -43,6 +43,7 @@ export const uploadFile = async (req, res) => {
 
       {
         "Content-Type": file.mimetype,
+        "Content-Disposition": "inline",
       }
 
     );

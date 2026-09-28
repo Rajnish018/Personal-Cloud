@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-import { minioClient } from "../config/minio.js";
+import { storageClient } from "../config/storageClient.js";
 import File from "../models/file.model.js";
 import Folder from "../models/folder.model.js";
 import User from "../models/user.model.js";
@@ -12,10 +12,10 @@ let storageBucketReady;
 const ensureStorageBucket = async () => {
   if (!storageBucketReady) {
     storageBucketReady = (async () => {
-      const exists = await minioClient.bucketExists(STORAGE_BUCKET);
+      const exists = await storageClient.bucketExists(STORAGE_BUCKET);
 
       if (!exists) {
-        await minioClient.makeBucket(STORAGE_BUCKET, "us-east-1");
+        await storageClient.makeBucket(STORAGE_BUCKET, "us-east-1");
       }
     })();
   }
@@ -89,7 +89,7 @@ const fileExistsInStorage = async (file) => {
   if (!file?.publicId) return false;
 
   try {
-    await minioClient.statObject(STORAGE_BUCKET, file.publicId);
+    await storageClient.statObject(STORAGE_BUCKET, file.publicId);
     return true;
   } catch (error) {
     return false;
@@ -117,7 +117,7 @@ const getTrashExpiryDate = () => {
 
 const removeFileObject = async (file) => {
   if (!file?.publicId) return;
-  await minioClient.removeObject(STORAGE_BUCKET, file.publicId);
+  await storageClient.removeObject(STORAGE_BUCKET, file.publicId);
 };
 
 const permanentlyDeleteFiles = async (files) => {
@@ -172,13 +172,14 @@ export const uploadFile = async (req, res) => {
 
     await ensureStorageBucket();
 
-    await minioClient.putObject(
+    await storageClient.putObject(
       STORAGE_BUCKET,
       objectName,
       req.file.buffer,
       req.file.size,
       {
         "Content-Type": req.file.mimetype,
+        "Content-Disposition": "inline",
       }
     );
 
@@ -189,7 +190,7 @@ export const uploadFile = async (req, res) => {
         normalizeFilePayload(req, folderId, objectName)
       );
     } catch (error) {
-      await minioClient.removeObject(STORAGE_BUCKET, objectName);
+      await storageClient.removeObject(STORAGE_BUCKET, objectName);
       throw error;
     }
 
@@ -655,7 +656,7 @@ export const downloadFile = async (req, res) => {
     file.lastOpenedAt = new Date();
     await file.save();
 
-    const downloadUrl = await minioClient.presignedGetObject(
+    const downloadUrl = await storageClient.presignedGetObject(
       STORAGE_BUCKET,
       file.publicId,
       5 * 60
@@ -693,21 +694,56 @@ export const copyFile = async (req, res) => {
       });
     }
 
-    const copy = await File.create({
-      name: `Copy of ${file.name}`,
-      originalName: file.originalName,
-      publicId: `${file.publicId}-copy-${Date.now()}`,
-      url: file.url,
-      secureUrl: file.secureUrl,
-      owner: req.user._id,
-      folder: file.folder,
-      folderId: file.folderId,
-      mimeType: file.mimeType,
-      resourceType: file.resourceType,
-      size: file.size,
-      extension: file.extension,
-      format: file.format,
-    });
+    const buildCopiedPublicId = (publicId) => {
+      const slashIndex = publicId.lastIndexOf("/");
+      const dotIndex = publicId.lastIndexOf(".");
+
+      // Keep the original extension at the end of the storage object name.
+      // This is important for MIME-type fallback when a MinIO replica is
+      // rebuilt and also keeps copied objects compatible with previews.
+      if (dotIndex > slashIndex) {
+        return (
+          `${publicId.slice(0, dotIndex)}-copy-${Date.now()}` +
+          publicId.slice(dotIndex)
+        );
+      }
+
+      return `${publicId}-copy-${Date.now()}`;
+    };
+
+    const copiedPublicId = buildCopiedPublicId(file.publicId);
+
+    await storageClient.copyObject(
+      STORAGE_BUCKET,
+      file.publicId,
+      copiedPublicId,
+      {
+        "Content-Type": file.mimeType || "application/octet-stream",
+        "Content-Disposition": "inline",
+      }
+    );
+
+    let copy;
+    try {
+      copy = await File.create({
+        name: `Copy of ${file.name}`,
+        originalName: file.originalName,
+        publicId: copiedPublicId,
+        url: copiedPublicId,
+        secureUrl: copiedPublicId,
+        owner: req.user._id,
+        folder: file.folder,
+        folderId: file.folderId,
+        mimeType: file.mimeType,
+        resourceType: file.resourceType,
+        size: file.size,
+        extension: file.extension,
+        format: file.format,
+      });
+    } catch (error) {
+      await storageClient.removeObject(STORAGE_BUCKET, copiedPublicId);
+      throw error;
+    }
 
     await syncStorageUsed(req.user._id);
 

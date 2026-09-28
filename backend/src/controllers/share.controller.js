@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { logActivity } from "../services/activityService.js";
 import { createNotification } from "../services/notificationService.js";
 
-import { minioClient } from "../config/minio.js";
+import { storageClient } from "../config/storageClient.js";
 import Share from "../models/share.model.js";
 import File from "../models/file.model.js";
 import Folder from "../models/folder.model.js";
@@ -255,7 +255,7 @@ export const downloadSharedFile = async (req, res) => {
     file.lastOpenedAt = new Date();
     await file.save();
 
-    const downloadUrl = await minioClient.presignedGetObject(
+    const downloadUrl = await storageClient.presignedGetObject(
       STORAGE_BUCKET,
       file.publicId,
       5 * 60

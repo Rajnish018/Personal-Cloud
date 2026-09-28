@@ -1,6 +1,6 @@
 import Folder from "../models/folder.model.js";
 import File from "../models/file.model.js";
-import { minioClient } from "../config/minio.js";
+import { storageClient } from "../config/storageClient.js";
 
 const getFolderId = (req) => req.params.folderId || req.params.id;
 const STORAGE_BUCKET = "users";
@@ -9,10 +9,10 @@ let storageBucketReady;
 const ensureStorageBucket = async () => {
   if (!storageBucketReady) {
     storageBucketReady = (async () => {
-      const exists = await minioClient.bucketExists(STORAGE_BUCKET);
+      const exists = await storageClient.bucketExists(STORAGE_BUCKET);
 
       if (!exists) {
-        await minioClient.makeBucket(STORAGE_BUCKET, "us-east-1");
+        await storageClient.makeBucket(STORAGE_BUCKET, "us-east-1");
       }
     })();
   }
@@ -31,7 +31,7 @@ const folderExistsInStorage = async (folder) => {
   if (!folder?.path) return false;
 
   try {
-    await minioClient.statObject(STORAGE_BUCKET, getFolderObjectName(folder.owner.toString(), folder.path));
+    await storageClient.statObject(STORAGE_BUCKET, getFolderObjectName(folder.owner.toString(), folder.path));
     return true;
   } catch (error) {
     return false;
@@ -52,7 +52,7 @@ const filterFoldersWithExistingStorage = async (folders) => {
 const deleteFolderObjects = async (userId, folderPath) => {
   const objectName = getFolderObjectName(userId, folderPath);
   try {
-    await minioClient.removeObject(STORAGE_BUCKET, objectName);
+    await storageClient.removeObject(STORAGE_BUCKET, objectName);
   } catch (error) {
     // ignore missing storage objects
   }
@@ -70,7 +70,7 @@ const deleteFilesByPrefix = async (userId, folderPath) => {
   if (!filesToDelete.length) return;
 
   await Promise.allSettled(
-    filesToDelete.map((file) => minioClient.removeObject(STORAGE_BUCKET, file.publicId))
+    filesToDelete.map((file) => storageClient.removeObject(STORAGE_BUCKET, file.publicId))
   );
 
   await File.deleteMany({ _id: { $in: filesToDelete.map((file) => file._id) } });
@@ -80,7 +80,7 @@ const fileExistsInStorage = async (file) => {
   if (!file?.publicId) return false;
 
   try {
-    await minioClient.statObject(STORAGE_BUCKET, file.publicId);
+    await storageClient.statObject(STORAGE_BUCKET, file.publicId);
     return true;
   } catch (error) {
     return false;
@@ -131,7 +131,7 @@ const createFolderPlaceholder = async (userId, folderPath) => {
 
   const objectName = `${userId}/drive${folderPath}/`;
 
-  await minioClient.putObject(
+  await storageClient.putObject(
     STORAGE_BUCKET,
     objectName,
     Buffer.alloc(0),

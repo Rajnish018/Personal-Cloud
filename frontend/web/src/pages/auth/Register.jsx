@@ -163,14 +163,14 @@ const Register = () => {
 
       {/* RIGHT FORM CANVAS */}
       <div className="relative flex-1 flex items-center justify-center p-6 sm:p-12 bg-white overflow-y-auto">
-        {loading && (
+        {/* {loading && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg shadow-slate-200/40">
               <div className="w-10 h-10 rounded-full border-4 border-white border-t-[#185FA5] border-t-4 border-[#185FA5] animate-spin" />
               <span className="text-sm font-semibold text-[#185FA5]">Creating account…</span>
             </div>
           </div>
-        )}
+        )} */}
         <div className="w-full max-w-[420px] flex flex-col py-6">
           
           {/* Header Texts */}
