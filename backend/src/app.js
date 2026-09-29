@@ -31,6 +31,8 @@ const allowedOrigins = (
   .map((url) => url.trim())
   .filter(Boolean);
 
+  console.log(process.env.CLIENT_URL)
+
 app.use(
   cors({
     origin(origin, callback) {

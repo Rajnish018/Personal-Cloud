@@ -25,13 +25,18 @@ const ensureStorageBucket = async () => {
   }
 };
 
-const getFolderObjectName = (userId, folderPath) => `${userId}/drive${folderPath}/`;
+const getFolderObjectName = (userId, folderPath) =>
+  `${userId}/drive${folderPath}/`;
 
 const folderExistsInStorage = async (folder) => {
   if (!folder?.path) return false;
 
   try {
-    await storageClient.statObject(STORAGE_BUCKET, getFolderObjectName(folder.owner.toString(), folder.path));
+    await storageClient.statObject(
+      STORAGE_BUCKET,
+      getFolderObjectName(folder.owner.toString(), folder.path)
+    );
+
     return true;
   } catch (error) {
     return false;
@@ -51,15 +56,20 @@ const filterFoldersWithExistingStorage = async (folders) => {
 
 const deleteFolderObjects = async (userId, folderPath) => {
   const objectName = getFolderObjectName(userId, folderPath);
+
   try {
     await storageClient.removeObject(STORAGE_BUCKET, objectName);
   } catch (error) {
-    // ignore missing storage objects
+    // Ignore missing storage objects
   }
 };
 
 const deleteFilesByPrefix = async (userId, folderPath) => {
-  const escapedPath = folderPath.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const escapedPath = folderPath.replace(
+    /[-/\\^$*+?.()|[\]{}]/g,
+    "\\$&"
+  );
+
   const prefix = `${userId}/drive${folderPath}/`;
 
   const filesToDelete = await File.find({
@@ -70,10 +80,14 @@ const deleteFilesByPrefix = async (userId, folderPath) => {
   if (!filesToDelete.length) return;
 
   await Promise.allSettled(
-    filesToDelete.map((file) => storageClient.removeObject(STORAGE_BUCKET, file.publicId))
+    filesToDelete.map((file) =>
+      storageClient.removeObject(STORAGE_BUCKET, file.publicId)
+    )
   );
 
-  await File.deleteMany({ _id: { $in: filesToDelete.map((file) => file._id) } });
+  await File.deleteMany({
+    _id: { $in: filesToDelete.map((file) => file._id) },
+  });
 };
 
 const fileExistsInStorage = async (file) => {
@@ -81,6 +95,7 @@ const fileExistsInStorage = async (file) => {
 
   try {
     await storageClient.statObject(STORAGE_BUCKET, file.publicId);
+
     return true;
   } catch (error) {
     return false;
@@ -99,17 +114,33 @@ const filterFilesWithExistingStorage = async (files) => {
 };
 
 const buildFolderQueryForDescendants = (folder) => {
-  const escapedPath = folder.path.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-  return { path: { $regex: `^${escapedPath}(/|$)` } };
+  const escapedPath = folder.path.replace(
+    /[-/\\^$*+?.()|[\]{}]/g,
+    "\\$&"
+  );
+
+  return {
+    path: {
+      $regex: `^${escapedPath}(/|$)`,
+    },
+  };
 };
 
 const getDescendantFolderIds = async (folder) => {
-  const escapedPath = folder.path.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const escapedPath = folder.path.replace(
+    /[-/\\^$*+?.()|[\]{}]/g,
+    "\\$&"
+  );
 
-  const folders = await Folder.find({
-    owner: folder.owner,
-    path: { $regex: `^${escapedPath}(/|$)` },
-  }, "_id");
+  const folders = await Folder.find(
+    {
+      owner: folder.owner,
+      path: {
+        $regex: `^${escapedPath}(/|$)`,
+      },
+    },
+    "_id"
+  );
 
   return folders.map((item) => item._id);
 };
@@ -123,7 +154,9 @@ const buildFolderPath = (name, parentFolder) => {
     return `/${safeName}`;
   }
 
-  return `${parentFolder.path === "/" ? "" : parentFolder.path}/${safeName}`;
+  return `${
+    parentFolder.path === "/" ? "" : parentFolder.path
+  }/${safeName}`;
 };
 
 const createFolderPlaceholder = async (userId, folderPath) => {
@@ -142,10 +175,19 @@ const createFolderPlaceholder = async (userId, folderPath) => {
   );
 };
 
+/**
+ * Create folder
+ */
 export const createFolder = async (req, res) => {
   try {
-    const { name, parentFolder = null, reuseExisting = false } = req.body;
-    const normalizedParentFolder = normalizeParentFolder(parentFolder);
+    const {
+      name,
+      parentFolder = null,
+      reuseExisting = false,
+    } = req.body;
+
+    const normalizedParentFolder =
+      normalizeParentFolder(parentFolder);
 
     if (!name?.trim()) {
       return res.status(422).json({
@@ -156,6 +198,9 @@ export const createFolder = async (req, res) => {
 
     let parent = null;
 
+    /**
+     * Validate parent folder
+     */
     if (normalizedParentFolder) {
       parent = await Folder.findOne({
         _id: normalizedParentFolder,
@@ -171,6 +216,10 @@ export const createFolder = async (req, res) => {
       }
     }
 
+    /**
+     * Prevent duplicate folder names
+     * inside the same parent
+     */
     const existingFolder = await Folder.findOne({
       owner: req.user._id,
       parentFolder: normalizedParentFolder,
@@ -193,6 +242,9 @@ export const createFolder = async (req, res) => {
       });
     }
 
+    /**
+     * Create database folder
+     */
     const folder = await Folder.create({
       name: name.trim(),
       owner: req.user._id,
@@ -200,9 +252,18 @@ export const createFolder = async (req, res) => {
       path: buildFolderPath(name.trim(), parent),
     });
 
+    /**
+     * Create storage placeholder
+     */
     try {
-      await createFolderPlaceholder(req.user._id.toString(), folder.path);
+      await createFolderPlaceholder(
+        req.user._id.toString(),
+        folder.path
+      );
     } catch (error) {
+      /**
+       * Roll back DB folder if storage creation fails
+       */
       await folder.deleteOne();
       throw error;
     }
@@ -222,9 +283,21 @@ export const createFolder = async (req, res) => {
   }
 };
 
+/**
+ * Get root folders
+ *
+ * IMPORTANT:
+ * Folders are returned directly from MongoDB.
+ * We do NOT require a MinIO directory object to exist
+ * in order for the folder to appear in the UI.
+ */
 export const getRootFolders = async (req, res) => {
   try {
-    const { search, sortBy = "date", order = "desc" } = req.query;
+    const {
+      search,
+      sortBy = "date",
+      order = "desc",
+    } = req.query;
 
     const query = {
       owner: req.user._id,
@@ -233,20 +306,39 @@ export const getRootFolders = async (req, res) => {
     };
 
     if (search) {
-      query.name = { $regex: search, $options: "i" };
+      query.name = {
+        $regex: search,
+        $options: "i",
+      };
     }
 
     const sortMap = {
-      name: { name: order === "asc" ? 1 : -1 },
-      date: { updatedAt: order === "asc" ? 1 : -1 },
+      name: {
+        name: order === "asc" ? 1 : -1,
+      },
+      date: {
+        updatedAt: order === "asc" ? 1 : -1,
+      },
     };
 
-    const folders = await Folder.find(query).sort(sortMap[sortBy] || sortMap.date);
-    const existingFolders = await filterFoldersWithExistingStorage(folders);
+    const folders = await Folder.find(query).sort(
+      sortMap[sortBy] || sortMap.date
+    );
 
+    /**
+     * Return MongoDB folders directly.
+     *
+     * Previously this was:
+     *
+     * const existingFolders =
+     *   await filterFoldersWithExistingStorage(folders);
+     *
+     * That could remove a valid database folder from
+     * the response when statObject() failed.
+     */
     return res.status(200).json({
       success: true,
-      folders: existingFolders,
+      folders,
     });
   } catch (error) {
     console.error(error);
@@ -258,10 +350,18 @@ export const getRootFolders = async (req, res) => {
   }
 };
 
+/**
+ * Get folder contents
+ */
 export const getFolderContents = async (req, res) => {
   try {
     const folderId = getFolderId(req);
-    const { search, sortBy = "name", order = "asc" } = req.query;
+
+    const {
+      search,
+      sortBy = "name",
+      order = "asc",
+    } = req.query;
 
     const folder = await Folder.findOne({
       _id: folderId,
@@ -292,34 +392,63 @@ export const getFolderContents = async (req, res) => {
     };
 
     if (search) {
-      folderQuery.name = { $regex: search, $options: "i" };
-      fileQuery.name = { $regex: search, $options: "i" };
+      folderQuery.name = {
+        $regex: search,
+        $options: "i",
+      };
+
+      fileQuery.name = {
+        $regex: search,
+        $options: "i",
+      };
     }
 
     const folderSortMap = {
-      name: { name: order === "asc" ? 1 : -1 },
-      date: { updatedAt: order === "asc" ? 1 : -1 },
+      name: {
+        name: order === "asc" ? 1 : -1,
+      },
+      date: {
+        updatedAt: order === "asc" ? 1 : -1,
+      },
     };
 
     const fileSortMap = {
-      name: { name: order === "asc" ? 1 : -1 },
-      size: { size: order === "asc" ? 1 : -1 },
-      type: { extension: order === "asc" ? 1 : -1 },
-      date: { updatedAt: order === "asc" ? 1 : -1 },
+      name: {
+        name: order === "asc" ? 1 : -1,
+      },
+      size: {
+        size: order === "asc" ? 1 : -1,
+      },
+      type: {
+        extension: order === "asc" ? 1 : -1,
+      },
+      date: {
+        updatedAt: order === "asc" ? 1 : -1,
+      },
     };
 
     const [folders, files] = await Promise.all([
-      Folder.find(folderQuery).sort(folderSortMap[sortBy] || folderSortMap.name),
-      File.find(fileQuery).sort(fileSortMap[sortBy] || fileSortMap.name),
+      Folder.find(folderQuery).sort(
+        folderSortMap[sortBy] || folderSortMap.name
+      ),
+
+      File.find(fileQuery).sort(
+        fileSortMap[sortBy] || fileSortMap.name
+      ),
     ]);
 
-    const existingFolders = await filterFoldersWithExistingStorage(folders);
-    const existingFiles = await filterFilesWithExistingStorage(files);
+    /**
+     * Same principle as root folders:
+     * database folders should not disappear merely
+     * because MinIO statObject() fails.
+     */
+    const existingFiles =
+      await filterFilesWithExistingStorage(files);
 
     return res.status(200).json({
       success: true,
       folder,
-      folders: existingFolders,
+      folders,
       files: existingFiles,
     });
   } catch (error) {
@@ -332,6 +461,9 @@ export const getFolderContents = async (req, res) => {
   }
 };
 
+/**
+ * Rename folder
+ */
 export const renameFolder = async (req, res) => {
   try {
     const folderId = getFolderId(req);
@@ -376,6 +508,9 @@ export const renameFolder = async (req, res) => {
   }
 };
 
+/**
+ * Move folder
+ */
 export const moveFolder = async (req, res) => {
   try {
     const folderId = getFolderId(req);
@@ -413,6 +548,9 @@ export const moveFolder = async (req, res) => {
   }
 };
 
+/**
+ * Delete folder
+ */
 export const deleteFolder = async (req, res) => {
   try {
     const folderId = getFolderId(req);
@@ -430,12 +568,20 @@ export const deleteFolder = async (req, res) => {
     }
 
     const now = new Date();
-    const descendantFolders = await getDescendantFolderIds(folder);
-    const affectedFolderIds = [folder._id, ...descendantFolders];
+
+    const descendantFolders =
+      await getDescendantFolderIds(folder);
+
+    const affectedFolderIds = [
+      folder._id,
+      ...descendantFolders,
+    ];
 
     await Folder.updateMany(
       {
-        _id: { $in: affectedFolderIds },
+        _id: {
+          $in: affectedFolderIds,
+        },
         owner: req.user._id,
       },
       {
@@ -448,7 +594,9 @@ export const deleteFolder = async (req, res) => {
     await File.updateMany(
       {
         owner: req.user._id,
-        folder: { $in: affectedFolderIds },
+        folder: {
+          $in: affectedFolderIds,
+        },
       },
       {
         isDeleted: true,
@@ -471,6 +619,9 @@ export const deleteFolder = async (req, res) => {
   }
 };
 
+/**
+ * Restore folder
+ */
 export const restoreFolder = async (req, res) => {
   try {
     const folderId = getFolderId(req);
@@ -493,12 +644,19 @@ export const restoreFolder = async (req, res) => {
       deletedAt: null,
     };
 
-    const descendantFolders = await getDescendantFolderIds(folder);
-    const affectedFolderIds = [folder._id, ...descendantFolders];
+    const descendantFolders =
+      await getDescendantFolderIds(folder);
+
+    const affectedFolderIds = [
+      folder._id,
+      ...descendantFolders,
+    ];
 
     await Folder.updateMany(
       {
-        _id: { $in: affectedFolderIds },
+        _id: {
+          $in: affectedFolderIds,
+        },
         owner: req.user._id,
       },
       update
@@ -507,7 +665,9 @@ export const restoreFolder = async (req, res) => {
     await File.updateMany(
       {
         owner: req.user._id,
-        folder: { $in: affectedFolderIds },
+        folder: {
+          $in: affectedFolderIds,
+        },
         isDeleted: true,
       },
       update
@@ -528,6 +688,9 @@ export const restoreFolder = async (req, res) => {
   }
 };
 
+/**
+ * Permanently delete folder
+ */
 export const permanentlyDeleteFolder = async (
   req,
   res
@@ -547,12 +710,30 @@ export const permanentlyDeleteFolder = async (
       });
     }
 
-    const descendantFolders = await getDescendantFolderIds(folder);
-    const affectedFolderIds = [folder._id, ...descendantFolders];
+    const descendantFolders =
+      await getDescendantFolderIds(folder);
 
-    await deleteFolderObjects(req.user._id.toString(), folder.path);
-    await deleteFilesByPrefix(req.user._id.toString(), folder.path);
-    await Folder.deleteMany({ _id: { $in: affectedFolderIds }, owner: req.user._id });
+    const affectedFolderIds = [
+      folder._id,
+      ...descendantFolders,
+    ];
+
+    await deleteFolderObjects(
+      req.user._id.toString(),
+      folder.path
+    );
+
+    await deleteFilesByPrefix(
+      req.user._id.toString(),
+      folder.path
+    );
+
+    await Folder.deleteMany({
+      _id: {
+        $in: affectedFolderIds,
+      },
+      owner: req.user._id,
+    });
 
     return res.status(200).json({
       success: true,
@@ -563,27 +744,37 @@ export const permanentlyDeleteFolder = async (
 
     return res.status(500).json({
       success: false,
-      message: "Failed to delete folder",
+      message: "Failed to permanently delete folder",
     });
   }
 };
 
+/**
+ * Empty folder trash
+ */
 export const emptyTrashFolders = async (req, res) => {
   try {
     const folders = await Folder.find({
       owner: req.user._id,
       isDeleted: true,
-    }).sort({ path: -1 });
+    }).sort({
+      path: -1,
+    });
 
     if (folders.length) {
       await Promise.allSettled(
         folders.map((folder) =>
-          deleteFolderObjects(req.user._id.toString(), folder.path)
+          deleteFolderObjects(
+            req.user._id.toString(),
+            folder.path
+          )
         )
       );
 
       await Folder.deleteMany({
-        _id: { $in: folders.map((folder) => folder._id) },
+        _id: {
+          $in: folders.map((folder) => folder._id),
+        },
         owner: req.user._id,
       });
     }
@@ -603,18 +794,21 @@ export const emptyTrashFolders = async (req, res) => {
   }
 };
 
+/**
+ * Get trash folders
+ */
 export const getTrashFolders = async (req, res) => {
   try {
     const folders = await Folder.find({
       owner: req.user._id,
       isDeleted: true,
-    }).sort({ deletedAt: -1 });
-
-    const existingFolders = await filterFoldersWithExistingStorage(folders);
+    }).sort({
+      deletedAt: -1,
+    });
 
     return res.status(200).json({
       success: true,
-      folders: existingFolders,
+      folders,
     });
   } catch (error) {
     console.error(error);

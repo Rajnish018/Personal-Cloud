@@ -33,9 +33,28 @@ export const useCreateFolder = () => {
 
   return useMutation({
     mutationFn: folderApi.createFolder,
-    onSuccess: () => {
-      refreshDriveQueries(queryClient);
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["folders"],
+        exact: false,
+      });
+
+      await queryClient.refetchQueries({
+        queryKey: ["folders"],
+        exact: false,
+        type: "active",
+      });
+
       toast.success("Folder created");
+    },
+
+    onError: (error) => {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to create folder"
+      );
     },
   });
 };
